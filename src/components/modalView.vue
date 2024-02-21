@@ -2,10 +2,10 @@
   <transition name="modal-animation">
     <div
       v-show="props.modalActive"
-      class="fixed top-0 right-0 left-0 z-50 justify-center items-center w-full"
+      class="fixed top-0 right-0 left-0 z-50 justify-center items-center w-full bg-white"
     >
       <div class="w-3/4 mx-auto flex flex-col items-center justify-center h-screen">
-        <div class="relative bg-white border rounded-md w-full flex flex-col">
+        <div class="relative border rounded-md w-full flex flex-col bg-gray-100">
           <!-- Modal header -->
           <div
             class="w-full flex flex-col items-center justify-between p-2 md:p-2 dark:border-gray-600"
@@ -38,15 +38,9 @@
               </div>
               <div class="mx-auto w-fit">
                 <button type="button" @click="operator = 'Adjust'" class="p-2 m-2 text-sm">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 512 512"
-                    width="35px"
-                    height="35px"
-                    class="w-fit mx-auto"
-                  >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
                     <path
-                      d="M448 256c0-106-86-192-192-192V448c106 0 192-86 192-192zM0 256a256 256 0 1 1 512 0A256 256 0 1 1 0 256z"
+                      d="M0 416c0 17.7 14.3 32 32 32l54.7 0c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48L480 448c17.7 0 32-14.3 32-32s-14.3-32-32-32l-246.7 0c-12.3-28.3-40.5-48-73.3-48s-61 19.7-73.3 48L32 384c-17.7 0-32 14.3-32 32zm128 0a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zM320 256a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zm32-80c-32.8 0-61 19.7-73.3 48L32 224c-17.7 0-32 14.3-32 32s14.3 32 32 32l246.7 0c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48l54.7 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-54.7 0c-12.3-28.3-40.5-48-73.3-48zM192 128a32 32 0 1 1 0-64 32 32 0 1 1 0 64zm73.3-64C253 35.7 224.8 16 192 16s-61 19.7-73.3 48L32 64C14.3 64 0 78.3 0 96s14.3 32 32 32l86.7 0c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48L480 128c17.7 0 32-14.3 32-32s-14.3-32-32-32L265.3 64z"
                     />
                   </svg>
                   Adjust
@@ -355,6 +349,7 @@
   const canvasReference = ref()
   let canvas: any = null
   let filters: any = null
+  let cropZone: any = null
 
   watch(
     () => operator.value,
@@ -373,28 +368,11 @@
         contrast: new fabric.Image.filters.Contrast()
       }
       canvas = new fabric.Canvas(canvasReference.value, {
-        containerClass: 'w-fit h-fit block mx-auto flex object-cover',
+        containerClass: 'w-fit h-fit block mx-auto flex',
         isDrawingMode: false
       })
-      canvas.getContext('2d', { willReadFrequently: true })
       canvas.setWidth(400)
       canvas.setHeight(400)
-
-      fabric.Image.fromURL(props.image, (_img: any) => {
-        _img._element.crossOrigin = 'anonymous'
-        _img.set({
-          left: 0,
-          top: 0,
-          selectable: false,
-          hoverCursor: 'default'
-        })
-        _img.filters.push(filters.brightness)
-        _img.filters.push(filters.saturation)
-        _img.filters.push(filters.contrast)
-
-        _img.scaleToWidth(400, false)
-        canvas.add(_img)
-      })
       var minX = 0
       var maxX = 400
       var minY = 0
@@ -421,7 +399,25 @@
           obj.lastScaleY = obj.scaleY
         }
       })
+
+      fabric.Image.fromURL(props.image, (_img: any) => {
+        _img._element.crossOrigin = 'anonymous'
+        _img.set({
+          top: 0,
+          left: 0,
+          selectable: false,
+          hoverCursor: 'default'
+        })
+        _img.filters.push(filters.brightness)
+        _img.filters.push(filters.saturation)
+        _img.filters.push(filters.contrast)
+
+        _img.scaleToWidth(400, false)
+        canvas.centerObject(_img)
+        canvas.add(_img)
+      })
     }
+    canvas.renderAll()
   })
   const props = defineProps<{
     modalActive: boolean
@@ -433,14 +429,13 @@
     emit('close')
   }
   const save = () => {
-    let rect = canvas.clipPath
-    let w = rect.aCoords.tr.x - rect.aCoords.tl.x
-    let h = rect.aCoords.bl.y - rect.aCoords.tl.y
+    let w = cropZone.aCoords.tr.x - cropZone.aCoords.tl.x
+    let h = cropZone.aCoords.bl.y - cropZone.aCoords.tl.y
     const base64 = canvas.toDataURL({
       format: 'webp',
       enableRetinaScaling: true,
-      left: rect.left,
-      top: rect.top,
+      left: cropZone.left,
+      top: cropZone.top,
       height: h,
       width: w
     })
@@ -454,6 +449,7 @@
     filters.brightness.brightness = brightness.value * 0.001
     canvas.getObjects()[0].applyFilters()
     canvas.renderAll()
+    console.log(canvas.toJSON())
   }
   function contrastApply() {
     filters.contrast.contrast = contrast.value * 0.001
@@ -522,59 +518,34 @@
   }
 
   function addCrop() {
-    if (canvas.getObjects().length < 2 && !canvas.clipPath) {
-      let obj = canvas.getObjects()[0]
-      const cropZone = new fabric.Rect({
-        width: canvas.getObjects()[0].width / 8,
-        height: canvas.getObjects()[0].height / 8,
-        left: (obj.aCoords.tr.x - obj.aCoords.tl.x - 200) / 2,
-        top: (obj.aCoords.bl.y - obj.aCoords.tl.y - 200) / 2,
-        opacity: 0.2
-      })
-      canvas.add(cropZone)
-      canvas.setActiveObject(canvas.item(1))
-    } else {
-      canvas.remove(canvas.getObjects()[1])
-      let obj = canvas.clipPath
-      const cropZone = new fabric.Rect({
-        width: obj.width / 2,
-        height: obj.height / 2,
-        left: obj.aCoords.tl.x + (obj.aCoords.tr.x - obj.aCoords.tl.x) / 4,
-        top: obj.aCoords.tl.y + (obj.aCoords.bl.y - obj.aCoords.tl.y) / 4,
-        opacity: 0.2
-      })
-      canvas.add(cropZone)
-      canvas.setActiveObject(canvas.item(1))
-    }
+    let obj = canvas.getObjects()[0]
+    cropZone = new fabric.Rect({
+      width: canvas.getObjects()[0].width / 8,
+      height: canvas.getObjects()[0].height / 8,
+      left: (obj.aCoords.tr.x - obj.aCoords.tl.x - 200) / 2,
+      top: (obj.aCoords.bl.y - obj.aCoords.tl.y) / 2,
+      opacity: 0.2,
+      hasRotatingPoint: false,
+      transparentCorners: false,
+      cornerColor: 'white',
+      cornerStrokeColor: 'black',
+      borderColor: 'black',
+      stroke: 'black',
+      cornerStyle: 'circle',
+      borderDashArray: [5, 5],
+      absolutePositioned: true
+    })
+    canvas.add(cropZone)
+    canvas.setActiveObject(canvas.item(1))
   }
-
-  function cropArea() {
-    canvas.clipPath = canvas.getObjects()[1]
-
-    const base64 = canvas.toDataURL({
-      format: 'webp',
-      enableRetinaScaling: true
-    })
-    fabric.Image.fromURL(base64, (_img: any) => {
-      _img._element.crossOrigin = 'anonymous'
-      _img.set({
-        left: 0,
-        top: 0,
-        selectable: false,
-        hoverCursor: 'default'
-      })
-      _img.filters.push(filters.brightness)
-      _img.filters.push(filters.saturation)
-      _img.filters.push(filters.contrast)
-
-      _img.scaleToWidth(400, false)
-      canvas.getObjects()[0] = _img
-    })
-    canvas.remove(canvas.getObjects()[1])
+  function resetCrop() {
+    canvas.remove(cropZone)
     canvas.discardActiveObject().renderAll()
   }
 
-  function resetCrop() {
+  function cropArea() {
+    canvas.getObjects()[0].clipPath = cropZone
+    canvas.remove(cropZone)
     canvas.discardActiveObject().renderAll()
   }
 </script>
