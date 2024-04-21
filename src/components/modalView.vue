@@ -536,16 +536,19 @@
     filters.brightness.brightness = brightness.value * 0.001
     canvas.getObjects()[0].applyFilters()
     canvas.renderAll()
+    console.log(canvas.toDatalessJSON())
   }
   function contrastApply() {
     filters.contrast.contrast = contrast.value * 0.001
     canvas.getObjects()[0].applyFilters()
     canvas.renderAll()
+    console.log(canvas.toDatalessJSON())
   }
   function saturationApply() {
     filters.saturation.saturation = saturation.value * 0.01
     canvas.getObjects()[0].applyFilters()
     canvas.renderAll()
+    console.log(canvas.toDatalessJSON())
   }
 
   function resetAdjust() {
